@@ -1,3 +1,4 @@
+# https://docs.microsoft.com/en-us/azure/devops/pipelines/?view=azure-devops
 # which branch to trigger on * means any
 trigger:
 - '*'
@@ -10,6 +11,8 @@ variables:
 # multistage pipeline enables you to define distinct phases that your change passes through as it's promoted through the pipeline
 # Each stage defines the agent, variable, and steps required to carry out that phase of the pipeline
 #  Stages break down into jobs, which are a series of steps & tasks that run sequentially as a unit
+
+# build stage
 stages:
 - stage: 'Build'
   displayName: 'Build the web application'
@@ -71,3 +74,39 @@ stages:
    # publish the artifact to the pipeline folder
     - publish: '$(Build.ArtifactStagingDirectory)'
       artifact: drop
+
+# deploy stage
+- stage: 'Deploy'
+  displayName: 'Deploy the web application'
+  # will only execute after build stage completed
+  dependsOn: Build
+  # define the jobs
+  jobs:
+  - deployment: Deploy
+    # set the agent pool
+    pool:
+      vmImage: 'ubuntu-18.04'
+    environment: dev
+    # deployment vars
+    variables:
+    - group: Release
+    # set execution strategy to run only once
+    strategy:
+      runOnce:
+        # deploy hook
+        deploy:
+          steps:
+          # current pipeline and artifact to deploy
+          - download: current
+            artifact: drop
+          # built in task for App Service deploys
+          - task: AzureWebApp@1
+            displayName: 'Azure App Service Deploy: website'
+            inputs:
+              appType: 'webAppLinux'
+              # name of the service connection
+              azureSubscription: 'Resource Manager - Tailspin - Space Game'
+              # reads the web app name from your pipeline variable
+              appName: '$(WebAppName)'
+              # get the zip to deploy
+              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
